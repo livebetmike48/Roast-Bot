@@ -50,11 +50,12 @@ KNOWN_GAGS = {
         "the unit tracker has a restraining order against him at this point",
     ],
     "mas": [
-        "only shows up in the DMs asking for the unethical",
-        "allergic to paying for anything, but never misses a chance to ask",
-        "treats this server like a customer service line, not a group chat",
-        "has never once offered anything, only ever asked for it",
-        "the human equivalent of a 'you up?' text, but for freebies",
+        "only shows up asking for the unethical, never for anything else",
+        "has never once asked about anything that wasn't an unethical",
+        "shows up, asks for the unethical, disappears -- every single time",
+        "the second something unethical drops, he's suddenly very present",
+        "his entire relationship with this server is asking for unethicals",
+        "doesn't care about the game, the bet, or the chat -- just the unethical",
     ],
 }
 
@@ -68,7 +69,7 @@ PERSONA_HINTS = {
     "derb": "Sleeps way too late, rolls in mid-afternoon, certified bum sleep schedule.",
     "wash wombat": "Historically bad at betting, always fires anyway despite a rough record.",
     "wombat": "Historically bad at betting, always fires anyway despite a rough record.",
-    "mas": "Only ever shows up asking for free/unethical stuff, never contributes anything himself.",
+    "mas": "Only ever shows up asking for the unethical -- never contributes anything, never talks about anything else.",
 }
 
 
@@ -84,13 +85,13 @@ GENERIC_LINES = [
     "sent {count} messages this week and somehow said nothing of substance",
     "{count} messages deep and still hasn't had an original thought",
     "posting at a {count}-messages-a-week pace like anyone asked",
-    "racked up {count} messages this week, a genuinely staggering amount of nothing",
+    "talks a lot for someone who never says anything worth remembering",
     "{count} messages and not a single one worth screenshotting",
-    "quantity over quality, {count} times over this week alone",
-    "clearly has nowhere else to be, {count} messages and counting",
-    "{count} messages this week, each one a small cry for attention",
-    "put in {count} messages of work for zero payoff",
-    "{count} messages deep into a bit nobody asked him to start",
+    "quantity over quality, every single week",
+    "clearly has nowhere else to be",
+    "each message somehow less interesting than the last",
+    "put in real hours this week for zero payoff",
+    "deep into a bit nobody asked him to start",
 ]
 
 LATE_NIGHT_LINES = [
@@ -104,23 +105,26 @@ LATE_NIGHT_LINES = [
 
 LOL_LINES = [
     "said 'lol' {lol_count} times this week without once actually laughing",
-    "typed 'lol' {lol_count} times, a certified non-laugh, every single one",
-    "hides behind 'lol' {lol_count} times a week instead of having a real reaction",
-    "{lol_count} 'lol's deep and still hasn't cracked an actual smile",
+    "hides behind 'lol' instead of ever having a real reaction",
+    "can't finish a thought without typing 'lol' like it means something",
+    "'lol' is basically his entire personality at this point",
+    "types 'lol' the way other people breathe -- constantly, without thinking",
 ]
 
 CAPS_LINES = [
     "went full caps lock {caps_count} times, main character syndrome in full effect",
-    "screamed in text {caps_count} times this week for absolutely no reason",
-    "{caps_count} caps-lock messages, none of them actually urgent",
-    "treats the caps lock key like it owes him money, {caps_count} times this week",
+    "screams in text for absolutely no reason",
+    "treats the caps lock key like it owes him money",
+    "acts like every message is breaking news",
+    "types like the group chat can't hear him unless he's yelling",
 ]
 
 QUESTION_LINES = [
     "asked {question_count} questions this week and still doesn't know anything",
-    "{question_count} questions deep and somehow more confused than when he started",
-    "questioned everything {question_count} times this week, answered nothing",
-    "{question_count} questions in and still hasn't connected a single dot",
+    "questions everything, answers nothing",
+    "still hasn't connected a single dot despite asking about all of them",
+    "more confused by the end of the week than at the start of it",
+    "asks like the answer will finally make sense this time -- it won't",
 ]
 
 # Rotating connectors between clauses, instead of always defaulting to
@@ -130,6 +134,15 @@ CONNECTORS = [
     "Also,", "And get this —", "Not to mention,", "On top of that,",
     "Oh, and", "As if that's not enough,", "Cherry on top:",
 ]
+
+# Chance any single qualifying "extra" clause (late-night/lol/caps/
+# questions) actually gets included. Crossing the threshold used to
+# GUARANTEE the clause would appear -- with deep backfilled history,
+# almost everyone clears these bars every time, so nearly every roast
+# ended up citing 2-3 stats regardless of wording variety. Gating it
+# probabilistically means plenty of roasts skip stats entirely and lean
+# on the gag/generic line alone.
+EXTRA_INCLUDE_CHANCE = 0.5
 
 FLASHBACK_LINES = [
     "never forget when he said \"{quote}\" — truly a defining moment",
@@ -187,27 +200,26 @@ def build_roast(display_name: str, stats: dict, recent_lines: list[str] | None =
         parts.append(random.choice(GENERIC_LINES).format(count=stats["count"]))
 
     extras = []
-    if stats.get("late_night_ratio", 0) >= 0.2:
+    if stats.get("late_night_ratio", 0) >= 0.2 and random.random() < EXTRA_INCLUDE_CHANCE:
         extras.append(random.choice(LATE_NIGHT_LINES))
-    if stats.get("lol_count", 0) >= 3:
+    if stats.get("lol_count", 0) >= 3 and random.random() < EXTRA_INCLUDE_CHANCE:
         extras.append(random.choice(LOL_LINES).format(lol_count=stats["lol_count"]))
-    if stats.get("caps_count", 0) >= 2:
+    if stats.get("caps_count", 0) >= 2 and random.random() < EXTRA_INCLUDE_CHANCE:
         extras.append(random.choice(CAPS_LINES).format(caps_count=stats["caps_count"]))
-    if stats.get("question_count", 0) >= 5:
+    if stats.get("question_count", 0) >= 5 and random.random() < EXTRA_INCLUDE_CHANCE:
         extras.append(random.choice(QUESTION_LINES).format(question_count=stats["question_count"]))
 
     if extras:
         random.shuffle(extras)
-        # Sometimes stack two qualifying extras instead of always exactly
-        # one -- varies the LENGTH and shape of the roast, not just the
-        # wording, so it doesn't always land as "gag + one clause."
-        take = 2 if len(extras) >= 2 and random.random() < 0.4 else 1
+        # Even among qualifying extras, usually take just one -- taking
+        # two is the occasional exception, not the norm, so the roast's
+        # length/shape varies too, not just the wording.
+        take = 2 if len(extras) >= 2 and random.random() < 0.25 else 1
         parts.extend(extras[:take])
-    elif known:
-        # Known-gag people still get a real stat line blended in even
-        # when no threshold-based extra fires -- otherwise a low-activity
-        # stretch means the SAME 2-3 hardcoded lines repeat with nothing
-        # fresh, which is exactly what felt stale in testing.
+    elif known and random.random() < 0.5:
+        # Known-gag people SOMETIMES get a real stat line blended in --
+        # not always, or the gag+stat combo becomes its own predictable
+        # skeleton. Plenty of roasts are just the gag alone.
         parts.append(random.choice(GENERIC_LINES).format(count=stats["count"]))
 
     if len(parts) == 1:
