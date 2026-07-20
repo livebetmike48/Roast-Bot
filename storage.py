@@ -37,12 +37,54 @@ def init_db():
                 value TEXT
             )
         """)
+        # Tracks each person's most recent lines (up to a few), so the
+        # template fallback can exclude ALL of them and never loop back to
+        # a joke too soon -- not just avoid the single immediately-prior one.
         c.execute("""
-            CREATE TABLE IF NOT EXISTS roast_log (
+            CREATE TABLE IF NOT EXISTS recent_roast_lines (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id TEXT,
-                roasted_at TEXT DEFAULT CURRENT_TIMESTAMP
+                line TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        c.execute("CREATE INDEX IF NOT EXISTS idx_recent_lines_user ON recent_roast_lines(user_id)")
+
+
+def get_recent_lines(user_id: str, limit: int = 3) -> list[str]:
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT line FROM recent_roast_lines WHERE user_id = ? ORDER BY id DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+    return [r["line"] for r in rows]
+
+
+def record_roast_line(user_id: str, line: str, keep: int = 10):
+    with _conn() as c:
+        c.execute("INSERT INTO recent_roast_lines (user_id, line) VALUES (?, ?)", (user_id, line))
+        # Trim to the most recent `keep` rows for this user so the table
+        # doesn't grow unbounded over months of daily roasts.
+        c.execute(
+            """
+            DELETE FROM recent_roast_lines
+            WHERE user_id = ? AND id NOT IN (
+                SELECT id FROM recent_roast_lines WHERE user_id = ? ORDER BY id DESC LIMIT ?
+            )
+            """,
+            (user_id, user_id, keep),
+        )
+
+
+def get_recent_messages(user_id: str, limit: int = 20) -> list[str]:
+    """Raw recent message text for a user -- real material for the AI
+    roast generator. Most recent first."""
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT content FROM messages WHERE user_id = ? ORDER BY id DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+    return [r["content"] for r in rows if r["content"]]
 
 
 def record_message(user_id: str, username: str, content: str, hour_utc: int):
@@ -53,12 +95,19 @@ def record_message(user_id: str, username: str, content: str, hour_utc: int):
         )
 
 
-def prune_old_messages(days: int = 30):
-    """Keeps the table from growing forever -- older raw message content
-    isn't needed once it's aged out of any reasonable roast window."""
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+def get_random_message(user_id: str, min_length: int = 8) -> str | None:
+    """Pulls one genuinely random message from a person's FULL history --
+    no time window, could be from their first day in the server or three
+    months ago. This is the 'flashback' material: real receipts, not a
+    paraphrase. min_length filters out throwaway one-word messages so the
+    callback actually has something to it."""
     with _conn() as c:
-        c.execute("DELETE FROM messages WHERE created_at < ?", (cutoff,))
+        row = c.execute(
+            "SELECT content FROM messages WHERE user_id = ? AND LENGTH(content) >= ? "
+            "ORDER BY RANDOM() LIMIT 1",
+            (user_id, min_length),
+        ).fetchone()
+    return row["content"] if row else None
 
 
 def get_user_stats(user_id: str, days: int = 7) -> dict:
