@@ -26,11 +26,25 @@ def init_db():
                 username TEXT,
                 content TEXT,
                 hour_utc INTEGER,
+                message_id TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
         c.execute("CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(user_id)")
         c.execute("CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at)")
+        # Migration: message_id was added after initial deploy -- existing
+        # databases won't have it yet, since CREATE TABLE IF NOT EXISTS is
+        # a no-op on a table that already exists.
+        try:
+            c.execute("ALTER TABLE messages ADD COLUMN message_id TEXT")
+        except Exception:
+            pass  # column already exists
+        # Unique index enables dedupe: a /backfill run can be re-run safely,
+        # and never double-counts a message already captured live. SQLite
+        # allows multiple NULLs in a unique index, so old rows from before
+        # this migration (no message_id) don't conflict with each other.
+        c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_msgid ON messages(message_id)")
+
         c.execute("""
             CREATE TABLE IF NOT EXISTS config (
                 key TEXT PRIMARY KEY,
@@ -87,12 +101,16 @@ def get_recent_messages(user_id: str, limit: int = 20) -> list[str]:
     return [r["content"] for r in rows if r["content"]]
 
 
-def record_message(user_id: str, username: str, content: str, hour_utc: int):
+def record_message(user_id: str, username: str, content: str, hour_utc: int, message_id: str = None) -> bool:
+    """Records a message. Returns True if it was newly inserted, False if
+    this message_id was already recorded (e.g. a repeated /backfill run
+    overlapping with live-tracked or previously-backfilled messages)."""
     with _conn() as c:
-        c.execute(
-            "INSERT INTO messages (user_id, username, content, hour_utc) VALUES (?, ?, ?, ?)",
-            (user_id, username, content, hour_utc),
+        cur = c.execute(
+            "INSERT OR IGNORE INTO messages (user_id, username, content, hour_utc, message_id) VALUES (?, ?, ?, ?, ?)",
+            (user_id, username, content, hour_utc, message_id),
         )
+        return cur.rowcount > 0
 
 
 def get_random_message(user_id: str, min_length: int = 8) -> str | None:
