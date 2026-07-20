@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 import storage
 import roasts
+import glaze
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -46,6 +47,19 @@ COUNTER_ROAST_COOLDOWN = int(os.getenv("COUNTER_ROAST_COOLDOWN", "30"))
 _last_counter_roast: dict[str, float] = {}
 
 
+def _generate_glaze_for(user_id: str, display_name: str) -> str:
+    """Pure template + real-compliment generation, no cost, same pattern
+    as _generate_roast_for but positive."""
+    stats = storage.get_user_stats(user_id)
+    recent_lines = storage.get_recent_lines(user_id, limit=3, kind="glaze")
+    candidates = storage.get_compliment_candidates(user_id, display_name)
+    compliment = glaze.find_compliment(candidates)
+
+    line = glaze.build_glaze(display_name, stats.get("count", 0), recent_lines=recent_lines, compliment=compliment)
+    storage.record_roast_line(user_id, line, kind="glaze")
+    return line
+
+
 class RoastBot(discord.Client):
     def __init__(self):
         super().__init__(intents=intents)
@@ -75,6 +89,13 @@ class RoastBot(discord.Client):
         )
         self.tree.add_command(backfill_cmd)
 
+        glaze_cmd = app_commands.Command(
+            name="glaze",
+            description="The opposite of /roast -- tell someone (default: Derb) they're the GOAT",
+            callback=self._glaze_callback,
+        )
+        self.tree.add_command(glaze_cmd)
+
         try:
             synced = await self.tree.sync()
             log.info("Synced %d slash commands", len(synced))
@@ -90,6 +111,27 @@ class RoastBot(discord.Client):
             )
             return
         line = _generate_roast_for(str(target.id), target.display_name)
+        await interaction.response.send_message(line)
+
+    async def _glaze_callback(self, interaction: discord.Interaction, member: discord.Member = None):
+        target = member
+        if target is None:
+            # No target given -- best-effort default to Derb, since
+            # that's the whole point of this feature. Falls back to
+            # asking for a mention if nobody matching is in the cache.
+            target = next(
+                (m for m in interaction.guild.members if "derb" in m.display_name.lower()),
+                None,
+            ) if interaction.guild else None
+            if target is None:
+                await interaction.response.send_message(
+                    "Couldn't find Derb automatically -- try `/glaze @Derb` directly."
+                )
+                return
+        if target.bot:
+            await interaction.response.send_message(f"**{target.display_name}** is a bot, but sure, it's doing great.")
+            return
+        line = _generate_glaze_for(str(target.id), target.display_name)
         await interaction.response.send_message(line)
 
     async def _setchannel_callback(self, interaction: discord.Interaction):
