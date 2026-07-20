@@ -85,16 +85,17 @@ class RoastBot(discord.Client):
 client = RoastBot()
 
 
-# 8pm/9pm/10pm ET = 00:00/01:00/02:00 UTC during EDT (UTC-4, in effect
-# now). NOTE: like the other bots' ET handling in this project, this
+# 8:10pm/9:10pm/10:10pm ET = 00:10/01:10/02:10 UTC during EDT (UTC-4, in
+# effect now). NOTE: like the other bots' ET handling in this project, this
 # doesn't auto-adjust for EST in the off-season -- it'll fire an hour
 # earlier ET during standard time. Override via DAILY_ROAST_HOURS_UTC
-# (comma-separated) if that ever needs correcting.
+# (comma-separated hours; minute is fixed at :10) if that ever needs
+# correcting.
 _hours_env = os.getenv("DAILY_ROAST_HOURS_UTC", "0,1,2")
 DAILY_ROAST_HOURS_UTC = [int(h.strip()) for h in _hours_env.split(",") if h.strip()]
 
 
-@tasks.loop(time=[dtime(hour=h, minute=0) for h in DAILY_ROAST_HOURS_UTC])
+@tasks.loop(time=[dtime(hour=h, minute=10) for h in DAILY_ROAST_HOURS_UTC])
 async def daily_roast(bot: RoastBot):
     """Fires once per scheduled time in DAILY_ROAST_HOURS_UTC (default
     8pm/9pm/10pm ET). Each run logs its pick immediately via mark_roasted,
