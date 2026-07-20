@@ -16,9 +16,12 @@ KNOWN_GAGS = {
         "still hasn't admitted he's wrong about a single thing this calendar year",
         "will die on a hill nobody else is even standing on",
         "stubborn to the point it should be a diagnosable condition",
-        "argues with the referee, the group chat, and reality itself, and loses to all three",
-        "the human embodiment of 'I'm not mad, you're wrong'",
-        "could be shown video evidence and still find a way to be right in his own head",
+        "has never once been wrong, according to only him",
+        "operates like he's never lost an argument in his life, and never will",
+        "will expose your whole identity in the group chat before he'll admit he's wrong",
+        "not a bro's bro, and everyone in this server knows it",
+        "the type to out your business just to win a point",
+        "always right, in the sense that he'll never say otherwise",
     ],
     "rsguy": [
         "currently thinking about a torta instead of literally anything happening in this chat",
@@ -35,6 +38,11 @@ KNOWN_GAGS = {
         "operates on a schedule that only exists in international waters",
         "sleep is his one true skill and honestly his only skill",
         "wakes up more refreshed at 4pm than most people feel after a full night's rest, and does absolutely nothing with it",
+        "moonlights as Mr. Moneyline and thinks nobody's noticed",
+        "keeps his Mr. Moneyline persona locked in the vault, but the parlay slips give it away every time",
+        "there's Derb, and then there's Mr. Moneyline, and only one of them is willing to admit he bet on that",
+        "hides Mr. Moneyline from everyone, as if the bets aren't the most public thing about him",
+        "Mr. Moneyline by night, professional sleeper by day, disaster around the clock",
     ],
     "wash wombat": [
         "down so bad on his bets the unit tracker should just start crying preemptively",
@@ -64,9 +72,9 @@ KNOWN_GAGS = {
 # since the AI should riff on the trait freely rather than reuse the exact
 # wording of any specific line.
 PERSONA_HINTS = {
-    "jjmac": "Notoriously stubborn -- never admits he's wrong about anything, will argue a losing point forever.",
+    "jjmac": "Notoriously stubborn -- never admits he's wrong about anything, thinks he's always right, and will expose people's identity/business in the chat rather than back down. Not a bro's bro.",
     "rsguy": "Obsessed with tortas, always seems to be thinking about food over whatever's actually happening.",
-    "derb": "Sleeps way too late, rolls in mid-afternoon, certified bum sleep schedule.",
+    "derb": "Sleeps way too late, rolls in mid-afternoon, certified bum sleep schedule. Also has a hidden betting alter-ego, 'Mr. Moneyline,' that he thinks he keeps secret from everyone.",
     "wash wombat": "Historically bad at betting, always fires anyway despite a rough record.",
     "wombat": "Historically bad at betting, always fires anyway despite a rough record.",
     "mas": "Only ever shows up asking for the unethical -- never contributes anything, never talks about anything else.",
