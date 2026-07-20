@@ -61,6 +61,13 @@ class RoastBot(discord.Client):
         )
         self.tree.add_command(setchannel_cmd)
 
+        backfill_cmd = app_commands.Command(
+            name="backfill",
+            description="ADMIN: pull this channel's real message history into the roast bot's memory",
+            callback=self._backfill_callback,
+        )
+        self.tree.add_command(backfill_cmd)
+
         try:
             synced = await self.tree.sync()
             log.info("Synced %d slash commands", len(synced))
@@ -82,6 +89,47 @@ class RoastBot(discord.Client):
         storage.set_config("announce_channel_id", str(interaction.channel_id))
         await interaction.response.send_message(f"✅ Daily roast will post in {interaction.channel.mention}.")
 
+    async def _backfill_callback(self, interaction: discord.Interaction, limit: int = 2000):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("Admin only.", ephemeral=True)
+            return
+        await interaction.response.defer()
+
+        recorded = 0
+        skipped = 0
+        try:
+            async for message in interaction.channel.history(limit=limit):
+                if message.author.bot or not message.content:
+                    skipped += 1
+                    continue
+                is_new = storage.record_message(
+                    str(message.author.id),
+                    message.author.display_name,
+                    message.content,
+                    message.created_at.astimezone(timezone.utc).hour,
+                    message_id=str(message.id),
+                )
+                if is_new:
+                    recorded += 1
+                else:
+                    skipped += 1
+        except discord.Forbidden:
+            await interaction.followup.send(
+                "Missing permission to read this channel's history -- the bot needs "
+                "**Read Message History** here."
+            )
+            return
+        except Exception as e:
+            log.error("Backfill failed: %s", e)
+            await interaction.followup.send(f"Backfill hit an error partway through: {e}")
+            return
+
+        await interaction.followup.send(
+            f"✅ Backfill complete for #{interaction.channel.name}: **{recorded}** new messages added to memory "
+            f"({skipped} skipped -- bots, empty, or already recorded). Run this again in other channels you "
+            f"want included, or with a higher `limit` for channels with more history."
+        )
+
     async def on_message(self, message: discord.Message):
         if message.author.bot:
             return
@@ -92,6 +140,7 @@ class RoastBot(discord.Client):
             message.author.display_name,
             message.content,
             message.created_at.astimezone(timezone.utc).hour,
+            message_id=str(message.id),
         )
 
     async def on_ready(self):
