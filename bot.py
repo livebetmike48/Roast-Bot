@@ -24,6 +24,21 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 
+def _generate_roast_for(user_id: str, display_name: str) -> str:
+    """Pure template generation -- no API call, no cost. The 'remembers
+    months of history' payoff comes from storage.get_random_message,
+    which draws from the person's ENTIRE message history (never pruned),
+    not just recent activity. Records whatever was delivered so future
+    picks avoid repeating the same line too soon."""
+    stats = storage.get_user_stats(user_id)
+    recent_lines = storage.get_recent_lines(user_id, limit=3)
+    flashback = storage.get_random_message(user_id)
+
+    line = roasts.build_roast(display_name, stats, recent_lines=recent_lines, flashback_quote=flashback)
+    storage.record_roast_line(user_id, line)
+    return line
+
+
 class RoastBot(discord.Client):
     def __init__(self):
         super().__init__(intents=intents)
@@ -54,8 +69,13 @@ class RoastBot(discord.Client):
 
     async def _roast_callback(self, interaction: discord.Interaction, member: discord.Member = None):
         target = member or interaction.user
-        stats = storage.get_user_stats(str(target.id))
-        line = roasts.build_roast(target.display_name, stats)
+        if target.bot:
+            await interaction.response.send_message(
+                f"**{target.display_name}** is a bot — it doesn't talk, it just works. "
+                f"Not much to roast there. Try a real person."
+            )
+            return
+        line = _generate_roast_for(str(target.id), target.display_name)
         await interaction.response.send_message(line)
 
     async def _setchannel_callback(self, interaction: discord.Interaction):
@@ -78,8 +98,6 @@ class RoastBot(discord.Client):
         log.info("Logged in as %s", self.user)
         if not daily_roast.is_running():
             daily_roast.start(self)
-        if not prune_loop.is_running():
-            prune_loop.start()
 
 
 client = RoastBot()
@@ -120,8 +138,7 @@ async def daily_roast(bot: RoastBot):
             pool = candidates  # everyone active got roasted recently -- just pick anyway
 
         target = random.choice(pool)
-        stats = storage.get_user_stats(target["user_id"])
-        line = roasts.build_roast(target["username"], stats)
+        line = _generate_roast_for(target["user_id"], target["username"])
 
         await channel.send(f"🔥 **Roast of the Day** 🔥\n{line}")
         storage.mark_roasted(target["user_id"])
@@ -132,19 +149,6 @@ async def daily_roast(bot: RoastBot):
 
 @daily_roast.before_loop
 async def before_daily_roast():
-    await client.wait_until_ready()
-
-
-@tasks.loop(hours=24)
-async def prune_loop():
-    try:
-        storage.prune_old_messages(days=30)
-    except Exception as e:
-        log.error("Message prune failed: %s", e)
-
-
-@prune_loop.before_loop
-async def before_prune():
     await client.wait_until_ready()
 
 
