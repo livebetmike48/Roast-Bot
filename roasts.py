@@ -84,23 +84,51 @@ GENERIC_LINES = [
     "sent {count} messages this week and somehow said nothing of substance",
     "{count} messages deep and still hasn't had an original thought",
     "posting at a {count}-messages-a-week pace like anyone asked",
+    "racked up {count} messages this week, a genuinely staggering amount of nothing",
+    "{count} messages and not a single one worth screenshotting",
+    "quantity over quality, {count} times over this week alone",
+    "clearly has nowhere else to be, {count} messages and counting",
+    "{count} messages this week, each one a small cry for attention",
+    "put in {count} messages of work for zero payoff",
+    "{count} messages deep into a bit nobody asked him to start",
 ]
 
 LATE_NIGHT_LINES = [
     "posts like a raccoon, wide awake at the exact hours normal people are asleep",
     "clearly has no relationship with a normal sleep schedule",
+    "running on a body clock set to a different time zone entirely, and not a good one",
+    "posting at hours that should honestly concern someone",
+    "up typing when the rest of the group is dead asleep like a normal person",
+    "operating on vampire hours and it shows in every message",
 ]
 
 LOL_LINES = [
     "said 'lol' {lol_count} times this week without once actually laughing",
+    "typed 'lol' {lol_count} times, a certified non-laugh, every single one",
+    "hides behind 'lol' {lol_count} times a week instead of having a real reaction",
+    "{lol_count} 'lol's deep and still hasn't cracked an actual smile",
 ]
 
 CAPS_LINES = [
     "went full caps lock {caps_count} times, main character syndrome in full effect",
+    "screamed in text {caps_count} times this week for absolutely no reason",
+    "{caps_count} caps-lock messages, none of them actually urgent",
+    "treats the caps lock key like it owes him money, {caps_count} times this week",
 ]
 
 QUESTION_LINES = [
     "asked {question_count} questions this week and still doesn't know anything",
+    "{question_count} questions deep and somehow more confused than when he started",
+    "questioned everything {question_count} times this week, answered nothing",
+    "{question_count} questions in and still hasn't connected a single dot",
+]
+
+# Rotating connectors between clauses, instead of always defaulting to
+# "Also," -- this alone kills a lot of the sameness across different
+# people's roasts.
+CONNECTORS = [
+    "Also,", "And get this —", "Not to mention,", "On top of that,",
+    "Oh, and", "As if that's not enough,", "Cherry on top:",
 ]
 
 FLASHBACK_LINES = [
@@ -169,7 +197,12 @@ def build_roast(display_name: str, stats: dict, recent_lines: list[str] | None =
         extras.append(random.choice(QUESTION_LINES).format(question_count=stats["question_count"]))
 
     if extras:
-        parts.append(random.choice(extras))
+        random.shuffle(extras)
+        # Sometimes stack two qualifying extras instead of always exactly
+        # one -- varies the LENGTH and shape of the roast, not just the
+        # wording, so it doesn't always land as "gag + one clause."
+        take = 2 if len(extras) >= 2 and random.random() < 0.4 else 1
+        parts.extend(extras[:take])
     elif known:
         # Known-gag people still get a real stat line blended in even
         # when no threshold-based extra fires -- otherwise a low-activity
@@ -177,5 +210,9 @@ def build_roast(display_name: str, stats: dict, recent_lines: list[str] | None =
         # fresh, which is exactly what felt stale in testing.
         parts.append(random.choice(GENERIC_LINES).format(count=stats["count"]))
 
-    body = " — " + ". Also, ".join(parts) if len(parts) > 1 else f" — {parts[0]}"
+    if len(parts) == 1:
+        body = f" — {parts[0]}"
+    else:
+        joined = f". {random.choice(CONNECTORS)} ".join(parts)
+        body = f" — {joined}"
     return f"**{display_name}**{body}."
