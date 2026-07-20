@@ -1,5 +1,6 @@
 import os
 import random
+import time
 import logging
 from datetime import datetime, timedelta, timezone, time as dtime
 
@@ -37,6 +38,12 @@ def _generate_roast_for(user_id: str, display_name: str) -> str:
     line = roasts.build_roast(display_name, stats, recent_lines=recent_lines, flashback_quote=flashback)
     storage.record_roast_line(user_id, line)
     return line
+
+
+# Per-user cooldown (seconds) so pinging/replying to the bot repeatedly
+# can't be used to farm instant roasts on demand.
+COUNTER_ROAST_COOLDOWN = int(os.getenv("COUNTER_ROAST_COOLDOWN", "30"))
+_last_counter_roast: dict[str, float] = {}
 
 
 class RoastBot(discord.Client):
@@ -142,6 +149,29 @@ class RoastBot(discord.Client):
             message.created_at.astimezone(timezone.utc).hour,
             message_id=str(message.id),
         )
+
+        # Counter-roast: fires when someone @mentions the bot or replies
+        # directly to one of its own messages -- talk to Roast Bot, get
+        # roasted back. Not sentiment-checked (no reliable way to tell
+        # "insult" from "compliment" from raw text without false
+        # positives) -- any direct engagement counts, cooldown-limited so
+        # it can't be spammed for on-demand roasts.
+        is_direct_engagement = self.user in message.mentions
+        if not is_direct_engagement and message.reference:
+            replied = message.reference.resolved
+            if replied is not None and getattr(replied, "author", None) == self.user:
+                is_direct_engagement = True
+
+        if is_direct_engagement:
+            now = time.monotonic()
+            last = _last_counter_roast.get(str(message.author.id), 0)
+            if now - last >= COUNTER_ROAST_COOLDOWN:
+                _last_counter_roast[str(message.author.id)] = now
+                try:
+                    line = _generate_roast_for(str(message.author.id), message.author.display_name)
+                    await message.channel.send(line, reference=message)
+                except Exception as e:
+                    log.error("Counter-roast failed for %s: %s", message.author.display_name, e)
 
     async def on_ready(self):
         log.info("Logged in as %s", self.user)
